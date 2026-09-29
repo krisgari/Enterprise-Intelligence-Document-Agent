@@ -25,3 +25,7 @@ mcp_servers/tickets_data.json
 
 # Logs
 *.log
+
+# Personal notes, not part of the project
+*.pdf
+!docs/*.pdf
