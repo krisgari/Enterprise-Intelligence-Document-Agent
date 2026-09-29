@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RagAgent — Trace Viewer</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    input, button { font-size: 14px; padding: 8px; }
+    .span { border-left: 3px solid #6b4fbb; padding: 8px 12px; margin: 8px 0; background: #f7f5fb; border-radius: 4px; }
+    .span-name { font-weight: 600; }
+    .span-duration { color: #666; font-size: 13px; }
+    pre { background: #f0f0f0; padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+    #error { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h2>RagAgent Trace Viewer</h2>
+  <p>Enter a trace ID (returned from a /query call) to see its span breakdown.</p>
+  <input id="traceId" placeholder="trace id" style="width: 300px;" />
+  <button onclick="loadTrace()">Load</button>
+  <div id="error"></div>
+  <div id="result"></div>
+
+  <script>
+    async function loadTrace() {
+      const traceId = document.getElementById('traceId').value.trim();
+      const errorEl = document.getElementById('error');
+      const resultEl = document.getElementById('result');
+      errorEl.textContent = '';
+      resultEl.innerHTML = '';
+      if (!traceId) return;
+
+      try {
+        const res = await fetch(`/traces/${traceId}`);
+        if (!res.ok) {
+          errorEl.textContent = `Error ${res.status}: trace not found`;
+          return;
+        }
+        const data = await res.json();
+        resultEl.innerHTML = `<p><strong>Total duration:</strong> ${data.duration_ms ?? 'n/a'} ms</p>`;
+        for (const span of data.spans) {
+          resultEl.innerHTML += `
+            <div class="span">
+              <div class="span-name">${span.name}</div>
+              <div class="span-duration">${span.duration_ms ?? 'n/a'} ms</div>
+              <pre>${JSON.stringify(span.attributes, null, 2)}</pre>
+            </div>`;
+        }
+      } catch (e) {
+        errorEl.textContent = 'Failed to reach API: ' + e.message;
+      }
+    }
+  </script>
+</body>
+</html>

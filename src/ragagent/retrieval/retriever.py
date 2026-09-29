@@ -1,0 +1,41 @@
+"""
+Queries the Chroma vector store for the most relevant chunks given a question.
+"""
+from dataclasses import dataclass
+
+from ragagent.config import settings
+from ragagent.retrieval.vectorstore import get_vectorstore
+
+
+@dataclass
+class RetrievedChunk:
+    text: str
+    source: str
+    score: float
+
+
+class Retriever:
+    def __init__(self):
+        self.vectorstore = get_vectorstore()
+
+    def retrieve(self, query: str, top_k: int | None = None) -> list[RetrievedChunk]:
+        """
+        Embed the query (handled internally by Chroma's embedding_function)
+        and return the top_k most relevant chunks with similarity scores.
+        """
+        top_k = top_k or settings.top_k
+        results = self.vectorstore.similarity_search_with_score(query, k=top_k)
+        return [
+            RetrievedChunk(
+                text=doc.page_content,
+                source=doc.metadata.get("source", "unknown"),
+                # Chroma returns a distance (lower = more similar) by default;
+                # convert to a 0-1 "similarity-ish" score for readability.
+                score=1.0 / (1.0 + distance),
+            )
+            for doc, distance in results
+        ]
+
+    def as_langchain_retriever(self, top_k: int | None = None):
+        """Expose a native LangChain retriever, useful for LCEL chains or LangGraph nodes."""
+        return self.vectorstore.as_retriever(search_kwargs={"k": top_k or settings.top_k})
