@@ -7,9 +7,10 @@ automatically picked up by LangSmith tracing (when LANGSMITH_TRACING=true)
 with no extra instrumentation code.
 """
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from ragagent.agents.base_agent import BaseAgent
+from ragagent.observability.retry import llm_retry
 from ragagent.retrieval.retriever import Retriever, RetrievedChunk
 from ragagent.config import settings
 
@@ -36,7 +37,11 @@ class RetrievalAgent(BaseAgent):
         )
 
     def run(self, user_input: str, **kwargs) -> dict:
-        chunks = self.retriever.retrieve(user_input, top_k=kwargs.get("top_k"))
+        chunks = self.retriever.retrieve(
+            user_input,
+            top_k=kwargs.get("top_k"),
+            tenant_id=kwargs.get("tenant_id"),
+        )
 
         if not chunks:
             return {
@@ -47,7 +52,7 @@ class RetrievalAgent(BaseAgent):
             }
 
         prompt = self._build_prompt(user_input, chunks)
-        response = self.llm.invoke([
+        response = self._invoke_llm([
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=prompt),
         ])
@@ -58,6 +63,15 @@ class RetrievalAgent(BaseAgent):
             "sources": sorted({c.source for c in chunks}),
             "confidence": round(avg_score, 3),
         }
+
+    @llm_retry
+    def _invoke_llm(self, messages: list[BaseMessage]):
+        """
+        Isolated so the retry decorator only wraps the actual network call
+        to Claude — retrying is safe here (answering a question has no
+        side effects), unlike e.g. the action agent's tool calls.
+        """
+        return self.llm.invoke(messages)
 
     def _build_prompt(self, question: str, chunks: list[RetrievedChunk]) -> str:
         context_text = "\n\n".join(f"[{c.source}]\n{c.text}" for c in chunks)

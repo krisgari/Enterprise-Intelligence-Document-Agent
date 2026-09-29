@@ -9,6 +9,7 @@ as of late 2025/2026, rather than a hand-rolled protocol implementation.
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from ragagent.config import settings
+from ragagent.observability.retry import mcp_retry
 
 _client: MultiServerMCPClient | None = None
 
@@ -24,11 +25,17 @@ def get_mcp_client() -> MultiServerMCPClient:
     return _client
 
 
+@mcp_retry
 async def get_mcp_tools():
     """
     Loads and returns LangChain-compatible tools from all configured MCP
     servers. Call this once at startup (or lazily on first use) and pass
     the result into create_react_agent() or bind_tools().
+
+    Retried on transient connection failures (e.g. the ticketing server's
+    subprocess hasn't finished starting yet) — safe to retry because
+    listing available tools has no side effects, unlike actually calling
+    one of them.
     """
     client = get_mcp_client()
     return await client.get_tools()

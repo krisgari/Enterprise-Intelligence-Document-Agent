@@ -71,6 +71,18 @@ class Settings:
     langsmith_project: str = os.getenv("LANGSMITH_PROJECT", "ragagent")
     langsmith_tracing_enabled: bool = os.getenv("LANGSMITH_TRACING", "false").lower() == "true"
 
+    # API auth — a shared-secret key checked on every request (see
+    # api/auth.py). Unset means auth is disabled, which is convenient for
+    # local dev but should always be set in any shared/deployed environment.
+    api_key: str = os.getenv("RAGAGENT_API_KEY", "")
+
+    # Multi-tenancy — every ingested chunk is tagged with a tenant_id, and
+    # every query can be scoped to one, so tenants sharing a single Chroma
+    # collection can't see each other's data. Falls back to a single
+    # "default" tenant when the caller doesn't specify one, which keeps
+    # single-tenant/local use unchanged.
+    default_tenant_id: str = os.getenv("RAGAGENT_DEFAULT_TENANT_ID", "default")
+
     # MCP servers this agent can connect to. Each entry follows the
     # config shape expected by langchain_mcp_adapters.MultiServerMCPClient.
     # "ticketing" points at the bundled sample server (mcp_servers/ticketing_server.py)

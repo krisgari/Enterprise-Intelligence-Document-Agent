@@ -13,7 +13,11 @@ _agent_router = AgentRouter()
 
 @router.post("/query", response_model=QueryResponse)
 def query(request: QueryRequest) -> QueryResponse:
-    response = _agent_router.run(request.query, session_id=request.session_id)
+    response = _agent_router.run(
+        request.query,
+        session_id=request.session_id,
+        tenant_id=request.tenant_id,
+    )
     return QueryResponse(
         allowed=response["allowed"],
         result=response.get("result"),

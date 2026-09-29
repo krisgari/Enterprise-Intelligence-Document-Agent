@@ -29,11 +29,13 @@ from ragagent.guardrails.input_guardrails import check_input
 from ragagent.guardrails.output_guardrails import check_output
 from ragagent.observability.tracer import tracer
 from ragagent.observability.logger import logger
+from ragagent.config import settings
 
 
 class RouterState(TypedDict, total=False):
     user_input: str
     trace_id: str
+    tenant_id: str
     allowed: bool
     reason: Optional[str]
     intent: str
@@ -81,12 +83,12 @@ class AgentRouter:
 
     def _retrieval_node(self, state: RouterState) -> RouterState:
         with tracer.span(state["trace_id"], "agent:retrieval_agent"):
-            result = self._retrieval_agent.run(state["user_input"])
+            result = self._retrieval_agent.run(state["user_input"], tenant_id=state.get("tenant_id"))
         return {"result": result}
 
     def _summarize_node(self, state: RouterState) -> RouterState:
         with tracer.span(state["trace_id"], "agent:summarize_agent"):
-            result = self._summarize_agent.run(state["user_input"])
+            result = self._summarize_agent.run(state["user_input"], tenant_id=state.get("tenant_id"))
         return {"result": result}
 
     def _action_node(self, state: RouterState) -> RouterState:
@@ -152,12 +154,13 @@ class AgentRouter:
 
     # --- Public entry point -------------------------------------------------
 
-    def run(self, user_input: str, trace_id: str | None = None, **kwargs) -> dict:
+    def run(self, user_input: str, trace_id: str | None = None, tenant_id: str | None = None, **kwargs) -> dict:
         trace = tracer.start_trace(trace_id)
 
         final_state = self.graph.invoke({
             "user_input": user_input,
             "trace_id": trace.trace_id,
+            "tenant_id": tenant_id or settings.default_tenant_id,
         })
 
         tracer.end_trace(trace.trace_id)

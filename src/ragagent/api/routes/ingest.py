@@ -16,6 +16,7 @@ router = APIRouter()
 @router.post("/ingest", response_model=IngestResponse)
 def ingest(request: IngestRequest) -> IngestResponse:
     directory = request.directory or settings.raw_data_dir
+    tenant_id = request.tenant_id or settings.default_tenant_id
     docs = load_documents(directory)
 
     all_chunks = []
@@ -31,7 +32,10 @@ def ingest(request: IngestRequest) -> IngestResponse:
     if all_chunks:
         store = get_vectorstore()
         texts = [c.text for c in all_chunks]
-        metadatas = [{"source": c.source, "chunk_id": c.chunk_id} for c in all_chunks]
+        metadatas = [
+            {"source": c.source, "chunk_id": c.chunk_id, "tenant_id": tenant_id}
+            for c in all_chunks
+        ]
         store.add_texts(texts=texts, metadatas=metadatas)
 
     return IngestResponse(documents_loaded=len(docs), chunks_created=len(all_chunks))

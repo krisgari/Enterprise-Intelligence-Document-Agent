@@ -8,6 +8,9 @@ from pydantic import BaseModel
 class QueryRequest(BaseModel):
     query: str
     session_id: str | None = None
+    # Scopes retrieval to one tenant's data in the shared Chroma collection.
+    # Defaults to settings.default_tenant_id ("default") when omitted.
+    tenant_id: str | None = None
 
 
 class QueryResponse(BaseModel):
@@ -20,6 +23,10 @@ class QueryResponse(BaseModel):
 
 class IngestRequest(BaseModel):
     directory: str | None = None  # defaults to settings.raw_data_dir
+    # Every chunk ingested in this call is tagged with this tenant_id, so a
+    # later query scoped to the same tenant_id only sees this data.
+    # Defaults to settings.default_tenant_id ("default") when omitted.
+    tenant_id: str | None = None
 
 
 class IngestResponse(BaseModel):
