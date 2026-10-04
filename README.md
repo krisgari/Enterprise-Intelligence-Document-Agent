@@ -188,6 +188,48 @@ or, for an HTTP-based MCP server:
 },
 ```
 
+## Auth, multi-tenancy, and reliability
+
+**API-key auth.** Every endpoint except `/health` requires an `X-API-Key`
+header when `RAGAGENT_API_KEY` is set in `.env`:
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $RAGAGENT_API_KEY" \
+  -d '{"query": "What is the refund policy for digital products?"}'
+```
+Leave `RAGAGENT_API_KEY` unset and auth is disabled (a warning is logged
+once) — fine for local iteration, not for anything you'd expose.
+
+**Multi-tenancy.** Every ingested chunk is tagged with a `tenant_id`
+(`RAGAGENT_DEFAULT_TENANT_ID` if you don't pass one), and retrieval
+filters on it, so one tenant's documents are never retrieved for
+another tenant's query:
+```bash
+python scripts/ingest.py --tenant-id acme-corp
+curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
+  -d '{"query": "What is the refund policy?", "tenant_id": "acme-corp"}'
+```
+
+**Retry/backoff.** LLM calls (`agents/*.py`) and MCP tool discovery
+(`mcp/client.py`) retry with exponential backoff on transient failures
+(`observability/retry.py`, via `tenacity`). Side-effecting action-agent
+calls (e.g. creating a ticket) are deliberately NOT retried, to avoid
+duplicate actions on a slow-but-successful request.
+
+## Evaluation
+
+```bash
+python scripts/evaluate.py                    # safe queries only (RAG, summarize)
+python scripts/evaluate.py --include-actions  # also exercises the action agent
+python scripts/evaluate.py --output results.json
+```
+Runs the 8 labeled cases in `data/eval/queries.json` against the live
+API, checking both intent routing and, for action-intent cases, that a
+real `TICKET-<id>` actually appears in the answer — not just that the
+agent *said* it would create one. Exits non-zero on any failure, so
+it's wireable into CI.
+
 ## What's real vs. what's still a stub
 
 **Working end-to-end:**
@@ -197,6 +239,10 @@ or, for an HTTP-based MCP server:
 - Guardrails: PII/injection detection on input; confidence/citation/scope checks on output
 - Tracing: local span-per-node tracing (works standalone) + automatic LangSmith tracing (when enabled)
 - FastAPI: `/query`, `/ingest`, `/feedback`, `/traces/{id}`, `/health`
+- API-key auth (`X-API-Key`) and per-tenant Chroma isolation (`tenant_id` filtering)
+- Retry/backoff on LLM and MCP calls via `tenacity` (deliberately excluding side-effecting action calls)
+- A real eval harness (`scripts/evaluate.py`) — 8 labeled cases, verifying actual side effects, not just stated intent
+- Docker Compose deployment (API + standalone Chroma server), including the API's own `Dockerfile`
 
 **Still stubbed / needs your input:**
 - `agents/router.py` `_classify_intent()` — currently keyword-based; swap for a small `ChatAnthropic` call with structured output for more robust classification
